@@ -1,0 +1,136 @@
+---
+title: "SD Airbnb R Project"
+output: html_notebook
+---
+
+## Introduction 
++ Breakdown of neighborhoods to districts
++ How many listings are in San Diego and where are they located?
++ Which hosts have multiple listings and where are they?
++ Average number of occupants allowed in a rental
++ As a perspective host, where should you consider opening an airbnb? 
++ As a perspective guest, where are most guest staying in San Diego and how much are they paying?
++ What impact does listing proximity to the beach have on Airbnb pricing?
+
+## 1. Data Preprocessing
+
+### 1.1 Load libraries
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+### 1.2 Load dataset
+```{r load_data, cache=TRUE, warning=FALSE, message=FALSE}
+raw.df <- readr::read_csv("./listings.csv")
+raw.df
+sd.df = raw.df
+```
+
+### 1.3 Clean your data
+```{r}
+sort(unique(sd.df$neighbourhood))
+```
+
+```{r}
+#Creating districts - 9 districts in SD
+northwestern <- c("Carmel Valley", "Del Mar Heights", "Del Mar Mesa", "Fairbanks Ranch Country Club", "La Jolla", "Beach Barber Tract","Bird Rock","Country Club","Hidden Valley","La Jolla", "La Jolla Alta","La Jolla Farms","La Jolla Heights","La Jolla Mesa","La Jolla Shores","La Jolla Village","Lower Hermosa","Muirlands","Muirlands West","Soledad South","Upper Hermosa","Village of La Jolla", "Pacific Highlands Ranch", "Torrey Hills", "Torrey Pines", "University City", "Via de la Valle", "North City")
+
+western <-c("Bay Ho","Bay Park","Harbor Island","Liberty Station","Midway","Mission Bay", "Mission Bay Park","Mission Beach","Morena","Ocean Beach","Pacific Beach","Point Loma","Fleet Ridge","La Playa","Loma Portal","Point Loma Heights","Loma Alta","Loma Palisades","Ocean Beach Highlands","Point Loma Highlands","Roseville","Wooded Area","Shelter Island","Sunset Cliffs", "Moreno Mission", "Midtown District")
+
+central <-c("Balboa Park","Bankers Hill","Downtown","Columbia","Core","Cortez Hill","East Village","Gaslamp Quarter","Harborview","Little Italy","Marina","Golden Hill","Hillcrest","Marston Hills","Middletown","Mission Hills", "North Hills", "Normal Heights","Cherokee Park","Adams North","Adams Park","North Park","Altadena","Burlingame","Montclair","Old Town","South Park","University Heights", "Midtown", "West University Heights", "Park West", "Horton Plaza")
+
+southeastern <- c("Alta Vista","Bay Terraces","North Bay Terrace","South Bay Terrace","Broadway Heights","Chollas View","Emerald Hills","Encanto","Jamacha","Lincoln Park","Lomita Village","O'Farrell" ,"South Encanto","Oak Park","Paradise Hills","Redwood Village","Rolando Park","Valencia Park","Webster","Bay Terrace", "Sky Line", "Jomacha-Lomita", "Darnall")
+
+northeastern <- c("Black Mountain Ranch","Carmel Mountain","Miramar Ranch North","Rancho Bernardo","Rancho Encantada", "Stonebridge","Rancho Peñasquitos","Sabre Springs","San Pasqual Valley","Scripps Ranch","Torrey Highlands","Rancho Penasquitos", "Rancho Bernadino")
+
+northern <- c("Clairemont","Clairemont Mesa","Clairemont Mesa East","Clairemont Mesa West","North Clairemont","Kearny Mesa","Mira Mesa","Miramar","Sorrento Valley","Sorrento Mesa")
+
+eastern <- c("Allied Gardens","Birdland","Del Cerro","Grantville","Lake Murray","Linda Vista","Mission Valley","Mission Valley East","Civita","Mission Valley West","Hotel Circle","San Carlos","Serra Mesa","Tierrasanta", "Bird Land")
+
+southernsouth <- c("Barrio Logan","Grant Hill","Logan Heights","Memorial","Shelltown","Sherman Heights","Stockton","San Ysidro", "Amphitheater And Water Park", "Nestor", "Bario Logan","Tijuana River Valley", "Egger Highlands", "Palm City")
+
+midcity <- c("City Heights","Azalea Park","Castle","Cherokee Point","Chollas Creek","Colina del Sol","Corridor","Fairmount Park","Gateway","Bay Ridge","Fairmount Village","Fox Canyon","Hollywood Park","Islenair","Ridgeview","Swan Canyon","Teralta East","Teralta West","College Area","Alvarado Estates","College East","College West","El Cerrito","Kensington","Mount Hope","Mountain View","Rolando Village","Southcrest","Talmadge", "City Heights West", "El Cerritos", "City Heights East", "Rolando")
+```
+
+```{r}
+sd.df = sd.df %>%
+  mutate(
+    district = case_when(
+      neighbourhood %in% northwestern ~ "Northwestern",
+      neighbourhood %in% western ~ "Western",
+      neighbourhood %in% central ~ "Central",
+      neighbourhood %in% southeastern ~ "Southeastern",
+      neighbourhood %in% northeastern ~ "Northeastern",
+      neighbourhood %in% northern ~ "Northern",
+      neighbourhood %in% eastern ~ "Eastern",
+      neighbourhood %in% southernsouth ~ "SouthernSouth",
+      neighbourhood %in% midcity ~ "Midcity"
+    ))
+sd.df
+```
+
+```{r}
+#finding all NA values
+sum(is.na(sd.df$district))
+```
+```{r}
+#finding neighbourhoods with NA value to verify they're not located in SD
+subset(sd.df,is.na(district))
+```
+
+```{r}
+#dropping rows with NA
+sd.df = sd.df %>%
+  drop_na(district)
+```
+```{r}
+#verifying no NA in district column
+sum(is.na(sd.df$district))
+```
+
+## Q1. Which district had the most listings
+
+```{r}
+table(sd.df$district)
+```
+
+## Q1. Which district has the highest and lowest price per night
+```{r}
+#finding average price by district
+avgPPN_dist = aggregate(x = sd.df$price,
+          by = list(sd.df$district),
+          FUN = mean) 
+          
+avgPPN_dist$x <- round(avgPPN_dist$x, digits = 2)
+avgPPN_dist <- rename(avgPPN_dist, District = Group.1, Avg_Price_PN = x)
+avgPPN_dist
+```
+
+```{r}
+dist_ppn <-ggplot(avgPPN_dist, aes(x= reorder(District, desc(Avg_Price_PN)), y=Avg_Price_PN, fill=District)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Avg_Price_PN), vjust=1.6, color="white", position = position_dodge(0.9), size=3.5)
+dist_ppn
+
+# text(seq(1.5, end_point, by = 2), par("usr")[3]-0.25, 
+#      srt = 60, adj = 1, xpd = TRUE,
+#      labels = paste(rownames(mtcars)), cex = 0.65)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
