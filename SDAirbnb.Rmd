@@ -170,7 +170,19 @@ g <- ggplot(sd.df, aes(x=room_type, y=price, fill=room_type, label = newhovertex
 
 g %>% ggplotly()
 ```
+```{r}
+sd.df
+```
 
+# Unable to get the desc(number_of_reviews_ltm) to work
+```{r}
+ggplot(sd.df, aes(x= reorder(district, desc(number_of_reviews_ltm)), y=number_of_reviews_ltm, fill=district)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=number_of_reviews_ltm), vjust=1.6, color="white", position = position_dodge(0.9), size=3.5) +
+  labs(x = "District", y = "Number of Reviews", title = "District by Number of Reviews")
+  
+```
 
 ```{r}
 # # Grouped barchart of district room types
