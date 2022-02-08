@@ -17,6 +17,8 @@ output: html_notebook
 ### 1.1 Load libraries
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
+library(ggpubr)
+library(plotly)
 ```
 
 ### 1.2 Load dataset
@@ -94,7 +96,7 @@ sum(is.na(sd.df$district))
 table(sd.df$district)
 ```
 
-## Q1. Which district has the highest and lowest price per night
+## Q2. Which district has the highest and lowest price per night
 ```{r}
 #finding average price by district
 avgPPN_dist = aggregate(x = sd.df$price,
@@ -110,27 +112,81 @@ avgPPN_dist
 dist_ppn <-ggplot(avgPPN_dist, aes(x= reorder(District, desc(Avg_Price_PN)), y=Avg_Price_PN, fill=District)) +
   geom_bar(stat="identity")+theme_minimal() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_text(aes(label=Avg_Price_PN), vjust=1.6, color="white", position = position_dodge(0.9), size=3.5)
+  geom_text(aes(label=Avg_Price_PN), vjust=1.6, color="white", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Districts in San Diego", y = "AVG Price / Night ($)", title = "Districts by AVG Price Per Night")
+  
 dist_ppn
-
-# text(seq(1.5, end_point, by = 2), par("usr")[3]-0.25, 
-#      srt = 60, adj = 1, xpd = TRUE,
-#      labels = paste(rownames(mtcars)), cex = 0.65)
+```
+## Q3. What is the most common type of place listed?
+```{r}
+sum_rtype = table(sd.df$room_type)
+sum_rtype
 ```
 
 ```{r}
-
+write.csv(sum_rtype, "C:\\Users\\yim\\Documents\\NYC Datascience Academy\\SD-Airbnb-RProject\\SD-Airbnb-RProject\\sum_rtype.csv", row.names=FALSE)
 ```
 
 ```{r}
-
+#barplot(table(sd.df$room_type)) 
 ```
 
 ```{r}
+sRoomType.df <- readr::read_csv("./sum_rtype.csv")
+sRoomType.df <- rename(sRoomType.df, Room_Type = Var1, Count_of_Listings = Freq)
+sRoomType.df
+```
 
+
+```{r}
+# ggplot(sRoomType.df, aes(Room_Type, Count_of_Listings)) +
+#   geom_linerange(
+#     aes(x = Room_Type, ymin = 0, ymax = Count_of_Listings), 
+#     color = "lightgray", size = 1.5
+#     )+
+#   geom_point(aes(color = Room_Type), size = 2)+
+#   ggpubr::color_palette("jco")+
+#   theme_pubclean()
 ```
 
 ```{r}
-
+ggplot(sRoomType.df, aes(x= reorder(Room_Type, desc(Count_of_Listings)), y=Count_of_Listings, fill=Room_Type)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Count_of_Listings), vjust=.1, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Room Type", y = "Count of Listings", title = "Room Type by Count of Listings")
+```
+```{r}
+newhovertext=paste0(sd.df$room_type,"<br>", sd.df$price)
 ```
 
+```{r}
+g <- ggplot(sd.df, aes(x=room_type, y=price, fill=room_type, label = newhovertext)) + 
+    geom_boxplot(alpha=0.3, outlier.shape = NA) +
+    scale_y_continuous(limits = quantile(sd.df$price, c(0.1, 0.9))) +
+    theme(legend.position="none") +
+    scale_fill_brewer(palette="BuPu") +
+    labs(x = "Room Type", y = "Price", title = "Room Type by Price")
+
+g %>% ggplotly()
+```
+
+
+```{r}
+# # Grouped barchart of district room types
+# ggplot(sd.df, aes(fill=Room_Type, y=value, x=Room_Type)) + 
+#     geom_bar(position="dodge", stat="identity")
+```
+
+```{r}
+# ggplot(sd.df, aes(x=n
+# p+geom_vline(data=mu, aes(xintercept=grp.mean, color=price),
+#              linetype="dashed")
+# ```ame, fill=price)) +
+#   geom_density()
+# # Use semi-transparent fill
+# p<-ggplot(df, aes(x=name, fill=price)) +
+#   geom_density(alpha=0.4)
+# p
+# # Add mean lines
+```
