@@ -8,8 +8,8 @@ output: html_notebook
 + How many listings are in San Diego and where are they located?
 + Which hosts have multiple listings and where are they?
 + Average number of occupants allowed in a rental
-+ As a perspective host, where should you consider opening an airbnb? 
-+ As a perspective guest, where are most guest staying in San Diego and how much are they paying?
++ As a prospective host, where should you consider opening an airbnb? 
++ As a prospective guest, where are most guest staying in San Diego and how much are they paying?
 + What impact does listing proximity to the beach have on Airbnb pricing?
 
 ## 1. Data Preprocessing
@@ -19,6 +19,10 @@ output: html_notebook
 library(tidyverse)
 library(ggpubr)
 library(plotly)
+library(data.table)
+library(wordcloud)
+library(tm)
+library(RColorBrewer)
 ```
 
 ### 1.2 Load dataset
@@ -28,7 +32,7 @@ raw.df
 sd.df = raw.df
 ```
 
-### 1.3 Clean your data
+### 1.3 Clean data
 ```{r}
 sort(unique(sd.df$neighbourhood))
 ```
@@ -76,6 +80,10 @@ sd.df
 sum(is.na(sd.df$district))
 ```
 ```{r}
+sd.df
+```
+
+```{r}
 #finding neighbourhoods with NA value to verify they're not located in SD
 subset(sd.df,is.na(district))
 ```
@@ -94,6 +102,23 @@ sum(is.na(sd.df$district))
 
 ```{r}
 table(sd.df$district)
+```
+```{r}
+num_listing <- sd.df %>%
+  group_by(district) %>% 
+  count('district') 
+
+num_listing
+```
+
+```{r}
+dist_numl <-ggplot(num_listing, aes(x= reorder(district, desc(n)), y=n, fill=district)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=n), vjust=1., color="white", position = position_dodge(0.9), size=3.5) +
+  labs(x = "District", y = "Number of Listings", title = "Districts by Listings")
+  
+dist_numl
 ```
 
 ## Q2. Which district has the highest and lowest price per night
@@ -153,13 +178,14 @@ sRoomType.df
 ggplot(sRoomType.df, aes(x= reorder(Room_Type, desc(Count_of_Listings)), y=Count_of_Listings, fill=Room_Type)) +
   geom_bar(stat="identity")+theme_minimal() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_text(aes(label=Count_of_Listings), vjust=.1, color="black", position = position_dodge(0.9), size=3.5) +
+  geom_text(aes(label=Count_of_Listings), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
   labs(x = "Room Type", y = "Count of Listings", title = "Room Type by Count of Listings")
 ```
 ```{r}
 newhovertext=paste0(sd.df$room_type,"<br>", sd.df$price)
 ```
 
+## How does room type affect price?
 ```{r}
 g <- ggplot(sd.df, aes(x=room_type, y=price, fill=room_type, label = newhovertext)) + 
     geom_boxplot(alpha=0.3, outlier.shape = NA) +
@@ -176,12 +202,126 @@ sd.df
 
 # Unable to get the desc(number_of_reviews_ltm) to work
 ```{r}
-ggplot(sd.df, aes(x= reorder(district, desc(number_of_reviews_ltm)), y=number_of_reviews_ltm, fill=district)) +
+ggplot(sd.df, aes(x= reorder(district, desc(number_of_reviews)), y=number_of_reviews, fill=district)) +
   geom_bar(stat="identity")+theme_minimal() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  geom_text(aes(label=number_of_reviews_ltm), vjust=1.6, color="white", position = position_dodge(0.9), size=3.5) +
+  geom_text(aes(label=number_of_reviews), vjust=1.6, color="black", position = position_dodge(0.9), size=3.5) +
   labs(x = "District", y = "Number of Reviews", title = "District by Number of Reviews")
   
+```
+```{r}
+#exploring to see if there is any reason western had more reviews than Northeastern
+```
+
+## What are common words used in the listing of highly reviewed listings vs low review listings (100 listings)
+```{r}
+top10rev <- sd.df %>% 
+  select(name, number_of_reviews) %>% 
+  arrange(desc(number_of_reviews)) %>% 
+  filter(number_of_reviews > quantile(number_of_reviews, .8))
+  #top_n(100)
+```
+```{r}
+bot10rev <- sd.df %>% 
+  select(name, number_of_reviews) %>% 
+  arrange(number_of_reviews) %>% 
+  filter(number_of_reviews > quantile(number_of_reviews, .2))
+```
+
+
+```{r}
+corpus <- Corpus(VectorSource(top10rev$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Top 10%", font.main =1, cex.main=1.5)
+```
+```{r}
+corpus <- Corpus(VectorSource(bot10rev$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Bottom 10%", font.main =1, cex.main=1.5)
+```
+```{r}
+sd.df
+```
+
+## listings of western vs northeastern
+### Of the top words found in the listing for western, 5 of them were related to the water
+```{r}
+westernlist <- sd.df %>% 
+  filter(district == "Western") %>% 
+  select(name, number_of_reviews)
+  #arrange(desc(number_of_reviews)) %>% 
+  #filter(number_of_reviews > quantile(number_of_reviews, .8))
+  #top_n(100)
+```
+```{r}
+northeasternlist <- sd.df %>% 
+  filter(district == "Northeastern") %>% 
+  select(name, number_of_reviews) 
+  #arrange(number_of_reviews) %>% 
+  #filter(number_of_reviews > quantile(number_of_reviews, .2))
+northeasternlist
+```
+```{r}
+corpus <- Corpus(VectorSource(westernlist$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Western Listing", font.main =1, cex.main=1.5)
+```
+```{r}
+corpus <- Corpus(VectorSource(northeasternlist$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Northeastern Listing", font.main =1, cex.main=1.5)
 ```
 
 ```{r}
@@ -202,3 +342,16 @@ ggplot(sd.df, aes(x= reorder(district, desc(number_of_reviews_ltm)), y=number_of
 # p
 # # Add mean lines
 ```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
