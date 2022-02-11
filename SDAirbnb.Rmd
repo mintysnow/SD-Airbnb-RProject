@@ -23,18 +23,33 @@ library(data.table)
 library(wordcloud)
 library(tm)
 library(RColorBrewer)
+library(ggthemes)
+library(RJSONIO)
 ```
 
 ### 1.2 Load dataset
+```{r}
+library(R.utils)
+dt = fread("listings.csv.gz")
+dt
+```
+
 ```{r load_data, cache=TRUE, warning=FALSE, message=FALSE}
-raw.df <- readr::read_csv("./listings.csv")
+# raw.df <- readr::read_csv("./listings.csv")
+# raw.df
+# sd.df = raw.df
+```
+
+```{r}
+raw.df<- readr::read_csv("./listings.csv.gz")
 raw.df
 sd.df = raw.df
 ```
 
+
 ### 1.3 Clean data
 ```{r}
-sort(unique(sd.df$neighbourhood))
+sort(unique(sd.df$neighbourhood_cleansed))
 ```
 
 ```{r}
@@ -62,15 +77,15 @@ midcity <- c("City Heights","Azalea Park","Castle","Cherokee Point","Chollas Cre
 sd.df = sd.df %>%
   mutate(
     district = case_when(
-      neighbourhood %in% northwestern ~ "Northwestern",
-      neighbourhood %in% western ~ "Western",
-      neighbourhood %in% central ~ "Central",
-      neighbourhood %in% southeastern ~ "Southeastern",
-      neighbourhood %in% northeastern ~ "Northeastern",
-      neighbourhood %in% northern ~ "Northern",
-      neighbourhood %in% eastern ~ "Eastern",
-      neighbourhood %in% southernsouth ~ "SouthernSouth",
-      neighbourhood %in% midcity ~ "Midcity"
+      neighbourhood_cleansed %in% northwestern ~ "Northwestern",
+      neighbourhood_cleansed %in% western ~ "Western",
+      neighbourhood_cleansed %in% central ~ "Central",
+      neighbourhood_cleansed %in% southeastern ~ "Southeastern",
+      neighbourhood_cleansed %in% northeastern ~ "Northeastern",
+      neighbourhood_cleansed %in% northern ~ "Northern",
+      neighbourhood_cleansed %in% eastern ~ "Eastern",
+      neighbourhood_cleansed %in% southernsouth ~ "SouthernSouth",
+      neighbourhood_cleansed %in% midcity ~ "Midcity"
     ))
 sd.df
 ```
@@ -98,11 +113,47 @@ sd.df = sd.df %>%
 sum(is.na(sd.df$district))
 ```
 
-## Q1. Which district had the most listings
+#removing dollar sign and commas from price column
+```{r}
+sd.df$price<-gsub("\\$|,","",sd.df$price)
+sd.df
+```
+#price class is character so need to convert to num
+```{r}
+summary(sd.df$price)
+```
+
+#convert price column to numeric
+```{r}
+sd.df <- transform(sd.df,price = as.numeric(price))
+```
+
+
+#overall average price per night for listings in san diego 
+```{r}
+mean(sd.df$price)
+```
 
 ```{r}
-table(sd.df$district)
+ggplot(sd.df, aes(x = price)) +
+  geom_density() +
+  geom_vline(xintercept = 292, size = 1, colour = "#FF3721",
+               linetype = "dashed")+
+  ggtitle("Density plot of mean prices") +
+        theme_stata() 
 ```
+```{r}
+sd.df %>% 
+  filter(price > 5000)
+```
+
+
+## Q1. Which district had the most listings
+
+# ```{r}
+# table(sd.df$district)
+# ```
+
 ```{r}
 num_listing <- sd.df %>%
   group_by(district) %>% 
@@ -161,6 +212,10 @@ sRoomType.df <- readr::read_csv("./sum_rtype.csv")
 sRoomType.df <- rename(sRoomType.df, Room_Type = Var1, Count_of_Listings = Freq)
 sRoomType.df
 ```
+# ```{r}
+# sRoomType.df <- rename(sRoomType.df, Room_Type = Var1, Count_of_Listings = Freq)
+# sRoomType.df
+# ```
 
 
 ```{r}
@@ -209,6 +264,47 @@ ggplot(sd.df, aes(x= reorder(district, desc(number_of_reviews)), y=number_of_rev
   labs(x = "District", y = "Number of Reviews", title = "District by Number of Reviews")
   
 ```
+#Finding the district with the highest average rating
+
+```{r}
+drpNA_Rat <- sd.df %>%
+  drop_na(review_scores_rating)
+```
+```{r}
+summary(drpNA_Rat$review_scores_rating)
+```
+```{r}
+drpNA_Rat <- transform(drpNA_Rat, review_scores_rating = as.numeric(review_scores_rating))
+```
+
+```{r}
+#finding average rating by district
+avgRat_dist <- drpNA_Rat %>%
+  group_by(district) %>% 
+  mean("review_scores_rating") 
+
+avgRat_dist
+
+
+# avgRat_dist = aggregate(x = sd.df$review_scores_rating,
+#           by = list(sd.df$district),
+#           FUN = mean) 
+# avgRat_dist    
+```
+```{r}
+avgRat_dist$x <- round(avgRat_dist$x, digits = 2)
+avgRat_dist <- rename(avgRat_dist, District = Group.1, review_scores_rating = x)
+avgRat_dist
+```
+
+```{r}
+ggplot(avgRat_dist, aes(x= reorder(Room_Type, desc(Count_of_Listings)), y=Count_of_Listings, fill=Room_Type)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Count_of_Listings), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Room Type", y = "Count of Listings", title = "Room Type by Count of Listings")
+```
+
 ```{r}
 #exploring to see if there is any reason western had more reviews than Northeastern
 ```
@@ -275,16 +371,11 @@ sd.df
 westernlist <- sd.df %>% 
   filter(district == "Western") %>% 
   select(name, number_of_reviews)
-  #arrange(desc(number_of_reviews)) %>% 
-  #filter(number_of_reviews > quantile(number_of_reviews, .8))
-  #top_n(100)
 ```
 ```{r}
 northeasternlist <- sd.df %>% 
   filter(district == "Northeastern") %>% 
   select(name, number_of_reviews) 
-  #arrange(number_of_reviews) %>% 
-  #filter(number_of_reviews > quantile(number_of_reviews, .2))
 northeasternlist
 ```
 ```{r}
@@ -324,34 +415,47 @@ wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.wor
 title(main="Northeastern Listing", font.main =1, cex.main=1.5)
 ```
 
+#counting the amenities offered for each listing
 ```{r}
-# # Grouped barchart of district room types
-# ggplot(sd.df, aes(fill=Room_Type, y=value, x=Room_Type)) + 
-#     geom_bar(position="dodge", stat="identity")
+sd.df <- sd.df %>% mutate(amen_ct = sapply(amenities, function(row){length(fromJSON(row))}))
+```
+```{r}
+sd.df
+```
+
+#filtering listing by above 4.0 ratings in overall, cleanliness, check-in, communication, location, and value
+```{r}
+median(sd.df$price)
 ```
 
 ```{r}
-# ggplot(sd.df, aes(x=n
-# p+geom_vline(data=mu, aes(xintercept=grp.mean, color=price),
-#              linetype="dashed")
-# ```ame, fill=price)) +
-#   geom_density()
-# # Use semi-transparent fill
-# p<-ggplot(df, aes(x=name, fill=price)) +
-#   geom_density(alpha=0.4)
-# p
-# # Add mean lines
+prospect_guest <- sd.df %>% 
+  filter(price <= 178, review_scores_rating > 4.0, review_scores_cleanliness >4.0, review_scores_checkin >4.0, review_scores_communication >4.0, review_scores_location>4.0, review_scores_value >4.0, amen_ct >= 43, host_identity_verified == TRUE) %>% 
+  arrange(desc(amen_ct,number_of_reviews))
+
+#top_n(prospect_guest, 100)
+prospect_guest
+```
+```{r}
+summary(sd.df$amen_ct)
 ```
 
 ```{r}
-
+top10ofSD <- sd.df %>% 
+  arrange(desc(review_scores_rating)) %>% 
+  filter(review_scores_rating > quantile(review_scores_rating, .8)) 
+  
+  #top_n(100)
+```
+```{r}
+bot10ofSD <- sd.df %>% 
+  select(name, number_of_reviews) %>% 
+  arrange(number_of_reviews) %>% 
+  filter(number_of_reviews > quantile(number_of_reviews, .2))
 ```
 
+#export edited sd.df to csv for shiny app
 ```{r}
-
-```
-
-```{r}
-
+write.csv(sd.df, "SDdataShiny.csv")
 ```
 
