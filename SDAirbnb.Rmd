@@ -235,6 +235,26 @@ dist_ppn <-ggplot(avgPPN_dist, aes(x= reorder(District, desc(Avg_Price_PN)), y=A
   
 dist_ppn
 ```
+
+```{r}
+ggplot(sd.df, aes(x=reorder(district, desc(price)), y=price, fill=district)) + 
+    geom_boxplot() +
+    scale_y_continuous(trans='log10')+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "District", y = "Log of Price", title = "Districts vs Price")
+```
+```{r}
+sd.df %>% 
+  group_by(room_type) %>%
+  #filter(room_type == "Entire home/apt") %>% 
+  summarize(medpriceD = median(price))
+```
+```{r}
+sd.df %>% 
+  filter(price >= 900, room_type =="Private room")
+```
+
+
 ## Q3. What is the most common type of place listed?
 ```{r}
 sum_rtype = table(sd.df$room_type)
