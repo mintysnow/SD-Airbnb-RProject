@@ -1,0 +1,834 @@
+---
+title: "SD Airbnb R Project"
+output: html_notebook
+---
+
+## Introduction 
++ Breakdown of neighborhoods to districts
++ How many listings are in San Diego and where are they located?
++ Which hosts have multiple listings and where are they?
++ Average number of occupants allowed in a rental
++ As a prospective host, where should you consider opening an airbnb? 
++ As a prospective guest, where are most guest staying in San Diego and how much are they paying?
++ What impact does listing proximity to the beach have on Airbnb pricing?
+
+## 1. Data Preprocessing
+
+### 1.1 Load libraries
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(plotly)
+library(data.table)
+library(wordcloud)
+library(tm)
+library(RColorBrewer)
+library(ggthemes)
+library(RJSONIO)
+library(lubridate)
+```
+
+### 1.2 Load dataset
+```{r}
+library(R.utils)
+dt = fread("listings.csv.gz")
+dt
+```
+
+```{r load_data, cache=TRUE, warning=FALSE, message=FALSE}
+# raw.df <- readr::read_csv("./listings.csv")
+# raw.df
+# sd.df = raw.df
+```
+
+```{r}
+raw.df<- readr::read_csv("./listings.csv.gz")
+raw.df
+sd.df = raw.df
+```
+
+
+### 1.3 Clean data
+```{r}
+sort(unique(sd.df$neighbourhood_cleansed))
+```
+
+```{r}
+#Creating districts - 9 districts in SD
+northwestern <- c("Carmel Valley", "Del Mar Heights", "Del Mar Mesa", "Fairbanks Ranch Country Club", "La Jolla", "Beach Barber Tract","Bird Rock","Country Club","Hidden Valley","La Jolla", "La Jolla Alta","La Jolla Farms","La Jolla Heights","La Jolla Mesa","La Jolla Shores","La Jolla Village","Lower Hermosa","Muirlands","Muirlands West","Soledad South","Upper Hermosa","Village of La Jolla", "Pacific Highlands Ranch", "Torrey Hills", "Torrey Pines", "University City", "Via de la Valle", "North City")
+
+western <-c("Bay Ho","Bay Park","Harbor Island","Liberty Station","Midway","Mission Bay", "Mission Bay Park","Mission Beach","Morena","Ocean Beach","Pacific Beach","Point Loma","Fleet Ridge","La Playa","Loma Portal","Point Loma Heights","Loma Alta","Loma Palisades","Ocean Beach Highlands","Point Loma Highlands","Roseville","Wooded Area","Shelter Island","Sunset Cliffs", "Moreno Mission", "Midtown District")
+
+central <-c("Balboa Park","Bankers Hill","Downtown","Columbia","Core","Cortez Hill","East Village","Gaslamp Quarter","Harborview","Little Italy","Marina","Golden Hill","Hillcrest","Marston Hills","Middletown","Mission Hills", "North Hills", "Normal Heights","Cherokee Park","Adams North","Adams Park","North Park","Altadena","Burlingame","Montclair","Old Town","South Park","University Heights", "Midtown", "West University Heights", "Park West", "Horton Plaza")
+
+southeastern <- c("Alta Vista","Bay Terraces","North Bay Terrace","South Bay Terrace","Broadway Heights","Chollas View","Emerald Hills","Encanto","Jamacha","Lincoln Park","Lomita Village","O'Farrell" ,"South Encanto","Oak Park","Paradise Hills","Redwood Village","Rolando Park","Valencia Park","Webster","Bay Terrace", "Sky Line", "Jomacha-Lomita", "Darnall")
+
+northeastern <- c("Black Mountain Ranch","Carmel Mountain","Miramar Ranch North","Rancho Bernardo","Rancho Encantada", "Stonebridge","Rancho Peñasquitos","Sabre Springs","San Pasqual Valley","Scripps Ranch","Torrey Highlands","Rancho Penasquitos", "Rancho Bernadino")
+
+northern <- c("Clairemont","Clairemont Mesa","Clairemont Mesa East","Clairemont Mesa West","North Clairemont","Kearny Mesa","Mira Mesa","Miramar","Sorrento Valley","Sorrento Mesa")
+
+eastern <- c("Allied Gardens","Birdland","Del Cerro","Grantville","Lake Murray","Linda Vista","Mission Valley","Mission Valley East","Civita","Mission Valley West","Hotel Circle","San Carlos","Serra Mesa","Tierrasanta", "Bird Land")
+
+southernsouth <- c("Barrio Logan","Grant Hill","Logan Heights","Memorial","Shelltown","Sherman Heights","Stockton","San Ysidro", "Amphitheater And Water Park", "Nestor", "Bario Logan","Tijuana River Valley", "Egger Highlands", "Palm City")
+
+midcity <- c("City Heights","Azalea Park","Castle","Cherokee Point","Chollas Creek","Colina del Sol","Corridor","Fairmount Park","Gateway","Bay Ridge","Fairmount Village","Fox Canyon","Hollywood Park","Islenair","Ridgeview","Swan Canyon","Teralta East","Teralta West","College Area","Alvarado Estates","College East","College West","El Cerrito","Kensington","Mount Hope","Mountain View","Rolando Village","Southcrest","Talmadge", "City Heights West", "El Cerritos", "City Heights East", "Rolando")
+```
+
+```{r}
+sd.df = sd.df %>%
+  mutate(
+    district = case_when(
+      neighbourhood_cleansed %in% northwestern ~ "Northwestern",
+      neighbourhood_cleansed %in% western ~ "Western",
+      neighbourhood_cleansed %in% central ~ "Central",
+      neighbourhood_cleansed %in% southeastern ~ "Southeastern",
+      neighbourhood_cleansed %in% northeastern ~ "Northeastern",
+      neighbourhood_cleansed %in% northern ~ "Northern",
+      neighbourhood_cleansed %in% eastern ~ "Eastern",
+      neighbourhood_cleansed %in% southernsouth ~ "SouthernSouth",
+      neighbourhood_cleansed %in% midcity ~ "Midcity"
+    ))
+sd.df
+```
+
+```{r}
+#finding all NA values in
+sum(is.na(sd.df$district))
+```
+
+```{r}
+#finding neighbourhoods with NA value to verify they're not located in SD
+subset(sd.df,is.na(district))
+```
+
+```{r}
+#dropping rows with NA
+sd.df = sd.df %>%
+  drop_na(district)
+```
+```{r}
+#verifying no NA in district column
+sum(is.na(sd.df$district))
+```
+
+#turn rows where price = 0 into NA to drop
+```{r}
+sd.df$price[sd.df$price == 0] <- NA
+sd.df = sd.df %>%
+  drop_na(price)
+```
+```{r}
+sd.df
+```
+
+#removing dollar sign and commas from price column
+```{r}
+sd.df$price<-gsub("\\$|,","",sd.df$price)
+sd.df
+```
+#price class is character so need to convert to num
+```{r}
+summary(sd.df$price)
+```
+
+#convert price column to numeric
+```{r}
+sd.df <- transform(sd.df,price = as.numeric(price))
+```
+
+
+#overall average price per night for listings in san diego 
+```{r}
+mean(sd.df$price)
+```
+```{r}
+sd.df %>% 
+  arrange(desc(price))
+```
+
+```{r}
+head(sd.df[order(sd.df$price,decreasing=F),],.90*nrow(data))
+```
+```{r}
+summary(sd.df$price)
+```
+#finding standard deviation
+```{r}
+sd(sd.df$price)
+```
+#two standard deviations from mean
+```{r}
+mean(sd.df$price) + 2*sd(sd.df$price)
+```
+```{r}
+ggplot(sd.df, aes(x = price)) +
+  geom_density(fill="lightblue") +
+  xlim(0,1063) +
+  scale_x_continuous(trans='log10')+
+  geom_vline(xintercept = 292, size = 1, colour = "#FF3721",
+               linetype = "dashed")+
+  ggtitle("Prices(log) of Listings in San Diego") +
+  labs(x = "Log Price")+
+  theme_stata() 
+
+```
+
+
+#price with lim of 2 std from mean
+```{r}
+ggplot(sd.df, aes(x = price)) +
+  geom_density() +
+  xlim(0,1063) +
+  geom_vline(xintercept = 292, size = 1, colour = "#FF3721",
+               linetype = "dashed")+
+  ggtitle("Density plot of mean prices") +
+        theme_stata() 
+```
+```{r}
+sd.df %>% 
+  filter(price > 5000)
+```
+
+
+## Q1. Which district had the most listings
+
+# ```{r}
+# table(sd.df$district)
+# ```
+
+```{r}
+num_listing <- sd.df %>%
+  group_by(district) %>% 
+  count('district') 
+
+num_listing
+```
+
+```{r}
+dist_numl <-ggplot(num_listing, aes(x= reorder(district, desc(n)), y=n, fill=district)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=n), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "District", y = "Number of Listings", title = "Districts by Listings")
+  
+dist_numl
+```
+
+## Q2. Which district has the highest and lowest price per night
+```{r}
+#finding average price by district
+avgPPN_dist = aggregate(x = sd.df$price,
+          by = list(sd.df$district),
+          FUN = mean) 
+          
+avgPPN_dist$x <- round(avgPPN_dist$x, digits = 2)
+avgPPN_dist <- rename(avgPPN_dist, District = Group.1, Avg_Price_PN = x)
+avgPPN_dist
+```
+
+```{r}
+dist_ppn <-ggplot(avgPPN_dist, aes(x= reorder(District, desc(Avg_Price_PN)), y=Avg_Price_PN, fill=District)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Avg_Price_PN), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Districts in San Diego", y = "AVG Price / Night ($)", title = "Districts by AVG Price Per Night")
+  
+dist_ppn
+```
+
+```{r}
+ggplot(sd.df, aes(x=reorder(district, desc(price)), y=price, fill=district)) + 
+    geom_boxplot() +
+    scale_y_continuous(trans='log10')+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = "District", y = "Log of Price", title = "Districts vs Price")
+```
+```{r}
+sd.df %>% 
+  group_by(room_type) %>%
+  #filter(room_type == "Entire home/apt") %>% 
+  summarize(medpriceD = median(price))
+```
+```{r}
+sd.df %>% 
+  filter(price >= 900, room_type =="Private room")
+```
+
+
+## Q3. What is the most common type of place listed?
+```{r}
+sum_rtype = table(sd.df$room_type)
+sum_rtype
+```
+
+```{r}
+write.csv(sum_rtype, "C:\\Users\\yim\\Documents\\NYC Datascience Academy\\SD-Airbnb-RProject\\SD-Airbnb-RProject\\sum_rtype.csv", row.names=FALSE)
+```
+
+```{r}
+#barplot(table(sd.df$room_type)) 
+```
+
+```{r}
+sRoomType.df <- readr::read_csv("./sum_rtype.csv")
+sRoomType.df <- rename(sRoomType.df, Room_Type = Var1, Count_of_Listings = Freq)
+sRoomType.df
+```
+
+```{r}
+rt_dist <- sd.df %>%
+  group_by(district) %>% 
+  count('room_type') 
+
+rt_dist
+
+```
+
+
+# ```{r}
+# sRoomType.df <- rename(sRoomType.df, Room_Type = Var1, Count_of_Listings = Freq)
+# sRoomType.df
+# ```
+
+
+```{r}
+# ggplot(sRoomType.df, aes(Room_Type, Count_of_Listings)) +
+#   geom_linerange(
+#     aes(x = Room_Type, ymin = 0, ymax = Count_of_Listings), 
+#     color = "lightgray", size = 1.5
+#     )+
+#   geom_point(aes(color = Room_Type), size = 2)+
+#   ggpubr::color_palette("jco")+
+#   theme_pubclean()
+```
+
+```{r}
+ggplot(sRoomType.df, aes(x= reorder(Room_Type, desc(Count_of_Listings)), y=Count_of_Listings, fill=Room_Type)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Count_of_Listings), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Room Type", y = "Count of Listings", title = "Room Type by Count of Listings")
+```
+```{r}
+ggplot(sRoomType.df, aes(x= reorder(Room_Type, desc(Count_of_Listings)), y=Count_of_Listings, fill=Room_Type)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Count_of_Listings), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Room Type", y = "Count of Listings", title = "Room Type by Count of Listings")
+```
+
+
+```{r}
+newhovertext=paste0(sd.df$room_type,"<br>", sd.df$price)
+```
+
+## How does room type affect price?
+```{r}
+ggplot(sd.df, aes(x=room_type, y=price, fill=room_type)) + 
+    geom_boxplot() +
+    scale_y_continuous(trans='log10')+
+    labs(x = "Room Type", y = "Log of Price", title = "Room Type by Price")
+```
+
+
+```{r}
+sd.df %>% 
+  group_by(room_type) %>%
+  #filter(room_type == "Entire home/apt") %>% 
+  summarize(avgpriceRT = mean(price))
+```
+
+```{r}
+sd.df %>% 
+  group_by(district) %>% 
+  summarize(number_of_reviews = sum(number_of_reviews)) %>% 
+
+  ggplot(aes(x= reorder(district, desc(number_of_reviews)), y=number_of_reviews, fill=district)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=number_of_reviews), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "District", y = "Number of Reviews", title = "District by Number of Reviews")
+  
+```
+
+
+#Finding the district with the highest average rating
+
+```{r}
+drpNA_Rat <- sd.df %>%
+  drop_na(review_scores_rating)
+```
+```{r}
+summary(drpNA_Rat$review_scores_rating)
+```
+```{r}
+drpNA_Rat <- transform(drpNA_Rat, review_scores_rating = as.numeric(review_scores_rating))
+```
+```{r}
+mean(drpNA_Rat$review_scores_rating)
+```
+```{r}
+colnames(sd.df)
+
+```
+
+```{r}
+#finding average rating by district
+drpNA_Rat %>% 
+group_by(district) %>% 
+summarize(sum(review_scores_rating * number_of_reviews)/sum(number_of_reviews))
+
+avgRat_dist = aggregate(x = drpNA_Rat$review_scores_rating,
+            by = list(drpNA_Rat$district),
+            FUN = mean) 
+
+avgRat_dist$x <- round(avgRat_dist$x, digits = 2)
+avgRat_dist <- rename(avgRat_dist, District = Group.1, review_scores_rating = x)
+avgRat_dist
+```
+```{r}
+avgRat_dist %>% 
+  arrange(desc(review_scores_rating))
+
+```
+
+```{r}
+sd.df %>% 
+  group_by(district) %>%
+  arrange(desc(number_of_reviews, review_scores_rating))
+```
+
+
+```{r}
+ggplot(avgRat_dist, aes(x= reorder(Room_Type, desc(Count_of_Listings)), y=Count_of_Listings, fill=Room_Type)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=Count_of_Listings), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Room Type", y = "Count of Listings", title = "Room Type by Count of Listings")
+```
+
+```{r}
+#exploring to see if there is any reason western had more reviews than Northeastern
+```
+
+## What are common words used in the listing of highly reviewed listings vs low review listings (100 listings)
+```{r}
+top10rev <- sd.df %>% 
+  select(name, number_of_reviews) %>% 
+  arrange(desc(number_of_reviews)) %>% 
+  filter(number_of_reviews > quantile(number_of_reviews, .8))
+  #top_n(100)
+```
+```{r}
+bot10rev <- sd.df %>% 
+  select(name, number_of_reviews) %>% 
+  arrange(number_of_reviews) %>% 
+  filter(number_of_reviews > quantile(number_of_reviews, .2))
+```
+
+
+```{r}
+corpus <- Corpus(VectorSource(top10rev$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Top 10%", font.main =1, cex.main=1.5)
+```
+```{r}
+corpus <- Corpus(VectorSource(bot10rev$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Bottom 10%", font.main =1, cex.main=1.5)
+```
+```{r}
+sd.df
+```
+
+## listings of western vs northeastern
+### Of the top words found in the listing for western, 5 of them were related to the water
+```{r}
+westernlist <- sd.df %>% 
+  filter(district == "Western") %>% 
+  select(name, number_of_reviews)
+```
+```{r}
+northeasternlist <- sd.df %>% 
+  filter(district == "Northeastern") %>% 
+  select(name, number_of_reviews) 
+northeasternlist
+```
+```{r}
+corpus <- Corpus(VectorSource(westernlist$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Western Listing", font.main =1, cex.main=1.5)
+```
+```{r}
+corpus <- Corpus(VectorSource(northeasternlist$name))
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, stripWhitespace)
+
+
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v)
+
+wordcloud(d$word, d$freq, random.order=FALSE, rot.per=0.3, scale=c(4,.5),max.words=50, colors = brewer.pal(8,"Dark2"))
+title(main="Northeastern Listing", font.main =1, cex.main=1.5)
+```
+
+#counting the amenities offered for each listing
+```{r}
+sd.df <- sd.df %>% mutate(amen_ct = sapply(amenities, function(row){length(fromJSON(row))}))
+```
+
+#boxplot number of amentities
+```{r}
+summary(sd.df$amen_ct)
+```
+
+```{r}
+ggplot(sd.df, aes(x = amen_ct)) +
+  geom_density(fill ="lightblue") +
+  geom_vline(xintercept = 34.47, size = 1, colour = "#FF3721",
+               linetype = "dashed")+
+  ggtitle("Amenities") +
+        theme_stata() +
+  labs(x = "Number of Amenities")
+```
+
+```{r}
+sd.df %>% 
+  group_by(district) %>% 
+  summarize(amen_ct = round(mean(amen_ct),2)) %>% 
+
+  ggplot(aes(x= reorder(district, desc(amen_ct)), y=amen_ct, fill=district)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=amen_ct), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "District", y = "AVG Number of Amenities", title = "District by AVG Number of Amenities")
+```
+
+
+#filtering listing by above 4.0 ratings in overall, cleanliness, check-in, communication, location, and value
+```{r}
+median(sd.df$price)
+```
+
+```{r}
+prospect_guest <- sd.df %>% 
+  filter(price <= 178, review_scores_rating > 4.0, review_scores_cleanliness >4.0, review_scores_checkin >4.0, review_scores_communication >4.0, review_scores_location>4.0, review_scores_value >4.0, amen_ct >= 43, host_identity_verified == TRUE) %>% 
+  arrange(desc(amen_ct,number_of_reviews))
+
+#top_n(prospect_guest, 100)
+prospect_guest
+```
+```{r}
+summary(sd.df$amen_ct)
+```
+
+```{r}
+top10ofSD <- sd.df %>% 
+  arrange(desc(review_scores_rating)) %>% 
+  filter(review_scores_rating > quantile(review_scores_rating, .8)) 
+  
+  #top_n(100)
+```
+```{r}
+bot10ofSD <- sd.df %>% 
+  select(name, number_of_reviews) %>% 
+  arrange(number_of_reviews) %>% 
+  filter(number_of_reviews > quantile(number_of_reviews, .2))
+```
+
+#looking into the calendar csv for which months/season are most popular, which type of day(weekday,weekend)
+```{r}
+calenderdec.df<- readr::read_csv("./calendar.csv.gz")
+caldec = calenderdec.df
+
+caldec = caldec %>% 
+  filter(available == FALSE)
+caldec
+```
+
+#editing the price column
+```{r}
+cal$price<-gsub("\\$|,","",cal$price)
+cal <- transform(cal,price = as.numeric(price))
+cal
+```
+```{r}
+tab <- table(cut(caldec$date, 'month'))
+
+data.frame(date=format(as.Date(names(tab)), '%m/%Y'),
+           Frequency=as.vector(tab))
+```
+
+
+```{r}
+calendarnov.df<- readr::read_csv("./calendarNov19.csv")
+calnov = calendarnov.df
+calnov = calnov %>% 
+  filter(available == FALSE)
+
+calnov
+```
+
+
+```{r}
+calendaroct.df<- readr::read_csv("./calendarOct23.csv")
+caloct = calendaroct.df
+caloct = caloct %>% 
+  filter(available == FALSE)
+
+caloct
+```
+
+```{r}
+calendarsept.df<- readr::read_csv("./calendarSept25.csv")
+calsept = calendarsept.df
+calsept = calsept %>% 
+  filter(available == FALSE)
+
+calsept
+```
+
+```{r}
+calendarAug24.df<- readr::read_csv("./calendarAug24.csv")
+calaug = calendarAug24.df
+calaug = calaug %>% 
+  filter(available == FALSE)
+
+calaug
+```
+
+```{r}
+calenderjul14.df<- readr::read_csv("./calendarjul14.csv")
+caljul = calenderjul14.df
+caljul = caljul %>% 
+  filter(available == FALSE)
+
+caljul
+```
+```{r}
+calenderapr23.df<- readr::read_csv("./calendarApr23.csv")
+calapr = calenderapr23.df
+calapr = calapr %>% 
+  filter(available == FALSE)
+
+calapr
+```
+```{r}
+calenderMar17.df<- readr::read_csv("./calendarMar17.csv")
+calmar= calenderMar17.df
+calmar = calmar %>% 
+  filter(available == FALSE)
+calmar
+```
+
+```{r}
+calenderFeb21.df<- readr::read_csv("./calendarFeb21.csv")
+calfeb= calenderFeb21.df
+calfeb = calfeb %>% 
+  filter(available == FALSE)
+calfeb
+```
+
+#calendar for jan 23 2021
+```{r}
+calenderjan23.df<- readr::read_csv("./calendarJan23.csv")
+caljan = calenderjan23.df
+caljan = caljan %>% 
+  filter(available == FALSE)
+caljan
+```
+```{r}
+df_list <- list(caljan,calfeb,calmar,calapr,caljul,calaug,calsept,caloct,calnov,caldec)
+jantodec =  Reduce(function(x, y) merge(x, y, all=TRUE), df_list, accumulate=FALSE)
+jantodec
+```
+```{r}
+jantodec21 = jantodec %>% 
+  filter(date >= as.Date("2021/01/01"), date<= as.Date("2021/12/31"))
+```
+
+```{r}
+tab <- table(cut(jantodec21$date, 'month'))
+
+jd_bookings21 = data.frame(date=format(as.Date(names(tab)), '%m/%Y'),
+           Frequency=as.vector(tab))
+
+```
+
+```{r}
+ggplot(jd_bookings21, aes(x= date, y=Frequency)) + 
+  geom_bar(stat="identity", fill="lightblue") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label= Frequency), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Months/Year", y = "Number of Bookings", title = "Bookings by Month")
+```
+
+
+```{r}
+jantodec22 = jantodec %>% 
+  filter(date >= as.Date("2022/01/01"), date<= as.Date("2022/12/31"))
+
+tab <- table(cut(jantodec22$date, 'month'))
+
+jd_bookings22 = data.frame(date=format(as.Date(names(tab)), '%m/%Y'),
+           Frequency=as.vector(tab))
+
+ggplot(jd_bookings22, aes(date, Frequency)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label= Frequency), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Months/Year", y = "Number of Bookings", title = "Bookings by Month")
+```
+```{r}
+jantodec$day <- weekdays(as.Date(jantodec$date))
+jantodec
+```
+
+```{r}
+bookdays = jantodec %>% 
+  count(day)
+bookdays
+```
+```{r}
+#aes(x= reorder(district, desc(n)), y=n, fill=district))
+ggplot(bookdays, aes(x= reorder(day, desc(n)), y=n)) + 
+  geom_bar(stat="identity", fill="lightblue") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label= n), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "Days", y = "Bookings", title = "Bookings by Days of Week")
+```
+```{r}
+northwesternhost = sd.df %>% 
+  filter(district == "Northwestern") %>% 
+  select(id)
+
+westernhost = sd.df %>% 
+  filter(district == "Western") %>% 
+  select(id)
+
+centralhost = sd.df %>% 
+  filter(district == "Central") %>% 
+  select(id)
+
+southeasternhost = sd.df %>% 
+  filter(district == "Southeastern") %>% 
+  select(id)
+
+northeasternhost = sd.df %>% 
+  filter(district == "Northeastern") %>% 
+  select(id)
+
+northernhost = sd.df %>% 
+  filter(district == "Northern") %>% 
+  select(id)
+
+easternhost = sd.df %>% 
+  filter(district == "Eastern") %>% 
+  select(id)
+
+southernsouthhost = sd.df %>% 
+  filter(district == "SouthernSouth") %>% 
+  select(id)
+
+midcityhost = sd.df %>% 
+  filter(district == "Midcity") %>% 
+  select(id)
+
+```
+```{r}
+hostsof21 = jantodec %>%
+  mutate(
+    district = case_when(
+      listing_id %in% northwesternhost$id ~ "Northwestern",
+      listing_id %in% westernhost$id ~ "Western",
+      listing_id %in% centralhost$id ~ "Central",
+      listing_id %in% southeasternhost$id ~ "Southeastern",
+      listing_id %in% northeasternhost$id ~ "Northeastern",
+      listing_id %in% northernhost$id ~ "Northern",
+      listing_id %in% easternhost$id ~ "Eastern",
+      listing_id %in% southernsouthhost$id ~ "SouthernSouth",
+      listing_id %in% midcityhost$id ~ "Midcity"
+    ))
+
+```
+```{r}
+sum(is.na(hostsof21$district))
+```
+```{r}
+bookings21 <- hostsof21 %>%
+  group_by(district) %>% 
+  drop_na(district) %>% 
+  count('district') 
+
+bookings21
+```
+
+```{r}
+ggplot(bookings21, aes(x= reorder(district, desc(n)), y=n, fill=district)) +
+  geom_bar(stat="identity")+theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  geom_text(aes(label=n), vjust=0, color="black", position = position_dodge(0.9), size=3.5) +
+  labs(x = "District", y = "Number of Stays", title = "Districts by Stays in 2021")
+  
+```
+
+
+```{r}
+install.packages("leaflet")
+
+```
+
+
+#Common words of list name
+
+
+#export edited sd.df to csv for shiny app
+```{r}
+write.csv(sd.df, "SDdataShiny.csv")
+```
+
