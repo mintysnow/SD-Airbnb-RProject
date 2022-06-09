@@ -1,7 +1,7 @@
 # SD-Airbnb-RProject
 
 ## Project Purpose
-- The purpose of this project is to analyze current listings in San Diego to see where someone should consider being host. 
+- The purpose of this project is to analyze current listings in San Diego to see where someone should consider being host and find what makes listings successful. 
 
 ## Findings
 - Guests stay in Western and Central districts the most.
