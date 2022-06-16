@@ -6,10 +6,10 @@
 ## Findings
 - Guests stay in Western and Central districts the most.
   - Since these two districts are near the ocean, it's likely that guests are staying here due to its proximity to the beaches. 
-  - It's also near big attractions like seaword, san diego zoo, and downtown san diego which is known to have a great nightlife. 
+  - It's also near big attractions like Seaworld, San Diego Zoo, and Downtown San Diego which is known to have a great nightlife. 
   - Another reason may be that there is an airport that borders Western and Central so people may be opting to stay in Airbnbs in that area.
 - Listings should offer at least 34 amenities.
-  - More amenities could make your home stand out over compeititors.
+  - More amenities could make a home stand out over compeititors.
 - Make sure to have high availability in December, especially Friday-Sunday as guests make more reservations during these times. 
 
 ## What is in the Folders
